@@ -1,0 +1,132 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<LangVersion>latest</LangVersion>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<RootNamespace>UserFeedback</RootNamespace>
+		<Configurations>Debug;Release;ReleaseToMods;ReleaseToModsWithExample</Configurations>
+	</PropertyGroup>
+
+	<!-- Flatpak install. Export VINTAGE_STORY / VINTAGE_STORY_DATA to use another one -->
+	<PropertyGroup Condition="'$(VINTAGE_STORY)' == ''">
+		<VINTAGE_STORY>/var/lib/flatpak/app/at.vintagestory.VintageStory/current/active/files/extra/vintagestory</VINTAGE_STORY>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(VINTAGE_STORY_DATA)' == ''">
+		<VINTAGE_STORY_DATA>$(HOME)/.var/app/at.vintagestory.VintageStory/config/VintagestoryData</VINTAGE_STORY_DATA>
+	</PropertyGroup>
+
+	<!-- tools/test-instance.sh passes its own ModsFolder -->
+	<PropertyGroup Condition="'$(ModsFolder)' == ''">
+		<ModsFolder>$(VINTAGE_STORY_DATA)/Mods</ModsFolder>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Reference Include="Vintagestory">
+			<HintPath>$(VINTAGE_STORY)/Vintagestory.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="VintagestoryAPI">
+			<HintPath>$(VINTAGE_STORY)/VintagestoryAPI.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="VintagestoryLib">
+			<HintPath>$(VINTAGE_STORY)/VintagestoryLib.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="VSCreativeMod">
+			<HintPath>$(VINTAGE_STORY)/Mods/VSCreativeMod.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="VSSurvivalMod">
+			<HintPath>$(VINTAGE_STORY)/Mods/VSSurvivalMod.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="VSEssentials">
+			<HintPath>$(VINTAGE_STORY)/Mods/VSEssentials.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<!-- Vintage Story Included Libraries -->
+		<Reference Include="0Harmony">
+			<HintPath>$(VINTAGE_STORY)/Lib/0Harmony.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="cairo-sharp">
+			<HintPath>$(VINTAGE_STORY)/Lib/cairo-sharp.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="Newtonsoft.Json">
+			<HintPath>$(VINTAGE_STORY)/Lib/Newtonsoft.Json.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="protobuf-net">
+			<HintPath>$(VINTAGE_STORY)/Lib/protobuf-net.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+	</ItemGroup>
+
+	<!-- Release zips the mod into bin/Release, the ReleaseToMods configurations zip it straight into the game's Mods folder -->
+	<PropertyGroup>
+		<PackToMods Condition="'$(Configuration)' == 'ReleaseToMods' Or '$(Configuration)' == 'ReleaseToModsWithExample'">true</PackToMods>
+		<PackMod Condition="'$(Configuration)' == 'Release' Or '$(PackToMods)' == 'true'">true</PackMod>
+		<PackDir Condition="'$(PackToMods)' == 'true'">$(ModsFolder)</PackDir>
+		<PackDir Condition="'$(PackToMods)' != 'true'">$(MSBuildProjectDirectory)/bin/$(Configuration)</PackDir>
+	</PropertyGroup>
+
+	<!-- Every build gets modinfo.json and the assets next to the dll, so bin/Debug/net10.0 is a complete mod folder for the launch configs -->
+	<ItemGroup>
+		<None Include="*ICENSE" CopyToOutputDirectory="PreserveNewest" />
+		<None Include="resources/**">
+			<Link>%(RecursiveDir)%(Filename)%(Extension)</Link>
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+	<UsingTask TaskName="ReadModVersion" TaskFactory="RoslynCodeTaskFactory" AssemblyFile="$(MSBuildToolsPath)/Microsoft.Build.Tasks.Core.dll">
+		<ParameterGroup>
+			<ModInfoPath ParameterType="System.String" Required="true" />
+			<Version ParameterType="System.String" Output="true" />
+		</ParameterGroup>
+		<Task>
+			<Using Namespace="System.IO" />
+			<Code Type="Fragment" Language="cs">
+				// "version": "x.y.z" -> take the text between the two quotes after the colon
+				var text = File.ReadAllText(ModInfoPath);
+				var colon = text.IndexOf(':', text.IndexOf("\"version\""));
+				var start = text.IndexOf('"', colon) + 1;
+				Version = text.Substring(start, text.IndexOf('"', start) - start);
+			</Code>
+		</Task>
+	</UsingTask>
+
+	<Target Name="Package" AfterTargets="PostBuildEvent" Condition="'$(PackMod)' == 'true'">
+		<ReadModVersion ModInfoPath="resources/modinfo.json">
+			<Output TaskParameter="Version" PropertyName="ModVersion" />
+		</ReadModVersion>
+		<!-- An older version left in Mods would load next to the new one -->
+		<ItemGroup Condition="'$(PackToMods)' == 'true'">
+			<PreviousZip Include="$(PackDir)/$(TargetName)-v*.zip" />
+		</ItemGroup>
+		<Delete Files="@(PreviousZip)" />
+		<!-- pdb and deps.json aren't needed in game -->
+		<ItemGroup>
+			<PackFile Include="$(TargetDir)**/*" Exclude="$(TargetDir)**/*.pdb;$(TargetDir)**/*.deps.json" />
+		</ItemGroup>
+		<RemoveDir Directories="$(IntermediateOutputPath)pack" />
+		<Copy SourceFiles="@(PackFile)" DestinationFiles="@(PackFile->'$(IntermediateOutputPath)pack/%(RecursiveDir)%(Filename)%(Extension)')" />
+		<ZipDirectory DestinationFile="$(PackDir)/$(TargetName)-v$(ModVersion).zip" SourceDirectory="$(IntermediateOutputPath)pack" Overwrite="true" />
+		<Message Importance="high" Text="Packed $(TargetName)-v$(ModVersion).zip into $(PackDir)" />
+	</Target>
+
+	<Target Name="PackageExample" AfterTargets="Package" Condition="'$(Configuration)' == 'ReleaseToModsWithExample'">
+		<ReadModVersion ModInfoPath="examples/userfeedbackexample/modinfo.json">
+			<Output TaskParameter="Version" PropertyName="ExampleVersion" />
+		</ReadModVersion>
+		<ItemGroup>
+			<PreviousExampleZip Include="$(PackDir)/UserFeedbackExample-v*.zip" />
+		</ItemGroup>
+		<Delete Files="@(PreviousExampleZip)" />
+		<ZipDirectory DestinationFile="$(PackDir)/UserFeedbackExample-v$(ExampleVersion).zip" SourceDirectory="examples/userfeedbackexample" Overwrite="true" />
+	</Target>
+</Project>

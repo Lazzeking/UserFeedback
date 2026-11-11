@@ -1,0 +1,16 @@
+{
+    "type": "code",
+    "modid": "userfeedback",
+    "name": "UserFeedback",
+    "authors": [
+        "Lazzeking"
+    ],
+    "version": "0.1.0",
+    "side": "Universal",
+    "requiredOnServer": false,
+    "requiredOnClient": false,
+    "dependencies": {
+        "game": "1.22.0"
+    },
+    "description": "Press F8 to send feedback about any mod to its author, with a screenshot and the context they need."
+}

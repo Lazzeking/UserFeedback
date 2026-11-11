@@ -1,0 +1,7 @@
+{
+	"destinations": [
+		{ "type": "github", "repo": "example-author/example-mod", "labels": ["feedback"] },
+		{ "type": "webpage", "url": "https://example.com/example-mod/feedback", "label": "The Example Mod feedback form" },
+		{ "type": "http", "url": "http://localhost:8080/userfeedback/v1" }
+	]
+}

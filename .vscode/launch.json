@@ -1,0 +1,33 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			"name": "Launch Linux Client (.NET)",
+			"type": "coreclr",
+			"request": "launch",
+			"preLaunchTask": "Build (Debug)",
+			"program": "${env:VINTAGE_STORY}/Vintagestory.dll",
+			"args": [
+				"--playStyle" , "preset-surviveandbuild",
+				"--openWorld" , "modding test world",
+				"--addModPath", "${workspaceFolder}/bin/Debug/net10.0",
+			],
+			"console": "internalConsole",
+			"internalConsoleOptions": "openOnSessionStart",
+		},
+		{
+			"name": "Launch Windows Client (.NET)",
+			"type": "coreclr",
+			"request": "launch",
+			"preLaunchTask": "Build (Debug)",
+			"program": "${env:VINTAGE_STORY}/Vintagestory.exe",
+			"args": [
+				"--playStyle" , "preset-surviveandbuild",
+				"--openWorld" , "modding test world",
+				"--addModPath", "${workspaceFolder}/bin/Debug/net10.0",
+			],
+			"console": "internalConsole",
+			"internalConsoleOptions": "openOnSessionStart",
+		}
+	]
+}

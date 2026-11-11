@@ -1,0 +1,14 @@
+{
+    "type": "content",
+    "modid": "userfeedbackexample",
+    "name": "UserFeedback Example",
+    "authors": [
+        "Lazzeking"
+    ],
+    "version": "1.0.0",
+    "side": "Universal",
+    "dependencies": {
+        "game": "1.22.0"
+    },
+    "description": "Reference for modders: how to add UserFeedback support to your own content, without depending on it."
+}
