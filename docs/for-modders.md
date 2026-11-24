@@ -19,7 +19,7 @@ All of it is optional and none of it makes your mod depend on UserFeedback, play
 
 ## The UserFeedback relay
 
-The lazy way, you dont ship anything in your mod (my favourite kind of way)
+The lazy way (my favourite kind of way), just getting reports through the relay doesnt need any file in your mod, verifying your modid is a token you put on your ModDB or GitHub page, you only need a `userfeedback.json` once you want more, like your own destinations, [extra files](#extra-files), [more log lines](#more-log-lines) or [your own wording](#your-own-wording)
 
 1. log in at [feedback.lazzeking.fyi](https://feedback.lazzeking.fyi) with Discord and verify your modid
 2. add a destination there, a Discord channel or your own server, your server gets the same upload as in [http-protocol.md](http-protocol.md) but signed by the relay, that page shows how to check the signature
