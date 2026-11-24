@@ -27,7 +27,7 @@ public class LogFile
 public class LogSnapshot
 {
     /// <summary>Only the end of longer files is read, that's where the current session is</summary>
-    public const int MaxBytesPerFile = 4 * 1024 * 1024;
+    public const int MaxBytesPerFile = UploadLimits.MaxFullLogBytes;
 
     private static readonly string[] ClientFiles = { "client-main.log", "client-debug.log", "client-crash.log" };
     // In singleplayer the server runs in the same game, so its logs show the server side of a mod
@@ -90,7 +90,8 @@ public class LogSnapshot
         return new LogFile { Name = name, Content = content, Truncated = truncated };
     }
 
-    private static List<LogEntry> Split(string file, string content)
+    // Internal so tests can split saved log snippets the same way
+    internal static List<LogEntry> Split(string file, string content)
     {
         var entries = new List<LogEntry>();
         var current = new StringBuilder();

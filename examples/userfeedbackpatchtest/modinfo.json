@@ -1,0 +1,15 @@
+{
+    "type": "code",
+    "modid": "userfeedbackpatchtest",
+    "name": "UserFeedback Patch Test",
+    "authors": [
+        "Lazzeking"
+    ],
+    "version": "1.0.0",
+    "side": "Client",
+    "requiredOnServer": false,
+    "dependencies": {
+        "game": "1.22.0"
+    },
+    "description": "For testing only. Misbehaves on purpose: patches UserFeedback and adds oversized data under another mod's modid, to show the warnings UserFeedback gives."
+}

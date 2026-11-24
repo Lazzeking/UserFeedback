@@ -1,3 +1,19 @@
-obj
-bin
-received-reports
+# Build output
+bin/
+obj/
+*.user
+.vs/
+.idea/
+TestResults/
+
+# Python
+__pycache__/
+
+# Reports received by tools/feedback-test-server.py
+received-reports/
+
+# Design notes shared with the relay side through its docs exchange, not part of the mod's repository
+docs/internal/
+
+# Temporary files, e.g. from AtomicFile writes during local testing
+*.tmp

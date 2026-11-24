@@ -1,0 +1,162 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://feedback.lazzeking.fyi/schema/userfeedback-v1.json",
+  "title": "UserFeedback: a mod's userfeedback.json",
+  "description": "assets/<modid>/config/userfeedback.json. Where reports about your mod go, extra files and log lines, and the panel's wording. See docs/for-modders.md. UserFeedback itself also checks what a schema can't (lang keys and icons in your own modid, local network urls); `.uf destinations` and `.uf check <modid>` list what it refused.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "destinations": {
+      "description": "Where reports about this mod can go. The player picks one; saving on their computer is always offered too.",
+      "type": "array",
+      "items": { "$ref": "#/definitions/destination" }
+    },
+    "files": {
+      "description": "Extra files for bug reports, relative to VintagestoryData: text files in ModConfig, ModData or Logs, never chat or audit logs. A folder ends in /, and * and ? work in file names. At most 50 files, 2 MB each.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(ModConfig|ModData|Logs)/",
+        "examples": ["ModConfig/yourmod.json", "ModData/yourmod/", "Logs/yourmod-*.log"]
+      }
+    },
+    "logMatch": {
+      "description": "Log line prefixes, like a logger name or a Harmony patch class, whose lines join this mod's log extract. Case-sensitive, not inside a longer word. Common log words (Error, Exception, Server…) and the game's or .NET's namespaces are refused.",
+      "type": "array",
+      "maxItems": 8,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 4,
+        "maxLength": 40,
+        "pattern": "^\\S(.*\\S)?$",
+        "examples": ["YourModLogger", "[yourmod]"]
+      }
+    },
+    "panel": {
+      "description": "Your own wording and faces for the panel when your mod is picked. Anything left out stays the standard text. See docs/panel.md.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": { "$ref": "#/definitions/title" },
+        "titleKey": { "$ref": "#/definitions/langKey" },
+        "feedback": { "$ref": "#/definitions/feedbackText" },
+        "bug": { "$ref": "#/definitions/bugText" },
+        "whichMod": { "$ref": "#/definitions/line" },
+        "whichModKey": { "$ref": "#/definitions/langKey" },
+        "screenshot": { "$ref": "#/definitions/line" },
+        "screenshotKey": { "$ref": "#/definitions/langKey" },
+        "sendTo": { "$ref": "#/definitions/line" },
+        "sendToKey": { "$ref": "#/definitions/langKey" },
+        "publicAllowed": { "$ref": "#/definitions/line" },
+        "publicAllowedKey": { "$ref": "#/definitions/langKey" },
+        "cancel": { "$ref": "#/definitions/button" },
+        "cancelKey": { "$ref": "#/definitions/langKey" },
+        "preview": { "$ref": "#/definitions/button" },
+        "previewKey": { "$ref": "#/definitions/langKey" },
+        "send": { "$ref": "#/definitions/button" },
+        "sendKey": { "$ref": "#/definitions/langKey" },
+        "ratings": {
+          "description": "Labels and icons for the four faces. The report still says great, good, meh or bad.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "great": { "$ref": "#/definitions/face" },
+            "good": { "$ref": "#/definitions/face" },
+            "meh": { "$ref": "#/definitions/face" },
+            "bad": { "$ref": "#/definitions/face" }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "destination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": {
+          "description": "github: a prefilled issue. webpage: the report is copied and your page opens. http: uploaded to your server (docs/http-protocol.md).",
+          "enum": ["github", "webpage", "http"]
+        },
+        "repo": { "description": "github: owner/repository", "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+        "labels": { "description": "github: labels added to the issue, if the repo has them", "type": "array", "items": { "type": "string" } },
+        "url": {
+          "description": "webpage: the page the report is pasted into. http: the endpoint. https only, except http://localhost for testing; never the player's local network.",
+          "type": "string",
+          "pattern": "^https?://"
+        },
+        "label": { "description": "The name the player sees in \"Send to\", instead of the generated one", "type": "string" },
+        "for": {
+          "description": "Which kinds of report it takes. Leave it out to take both.",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["bug", "feedback"] }
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "type": { "const": "github" } } }, "then": { "required": ["repo"] } },
+        { "if": { "properties": { "type": { "enum": ["webpage", "http"] } } }, "then": { "required": ["url"] } }
+      ]
+    },
+    "langKey": {
+      "description": "A lang key in your own mod's domain, like \"yourmod:panel-title\". Used instead of the plain text when set.",
+      "type": "string",
+      "pattern": "^[a-z0-9_]+:[^ ]+$"
+    },
+    "title": { "type": "string", "minLength": 1, "maxLength": 40 },
+    "heading": { "type": "string", "minLength": 1, "maxLength": 48 },
+    "button": { "type": "string", "minLength": 1, "maxLength": 32 },
+    "line": { "type": "string", "minLength": 1, "maxLength": 70 },
+    "feedbackText": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "heading": { "$ref": "#/definitions/heading" },
+        "headingKey": { "$ref": "#/definitions/langKey" },
+        "prompt": { "$ref": "#/definitions/line" },
+        "promptKey": { "$ref": "#/definitions/langKey" },
+        "text": { "$ref": "#/definitions/line" },
+        "textKey": { "$ref": "#/definitions/langKey" },
+        "switch": { "$ref": "#/definitions/button" },
+        "switchKey": { "$ref": "#/definitions/langKey" }
+      }
+    },
+    "bugText": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "heading": { "$ref": "#/definitions/heading" },
+        "headingKey": { "$ref": "#/definitions/langKey" },
+        "text": { "$ref": "#/definitions/line" },
+        "textKey": { "$ref": "#/definitions/langKey" },
+        "switch": { "$ref": "#/definitions/button" },
+        "switchKey": { "$ref": "#/definitions/langKey" },
+        "involved": { "$ref": "#/definitions/line" },
+        "involvedKey": { "$ref": "#/definitions/langKey" },
+        "details": { "$ref": "#/definitions/line" },
+        "detailsKey": { "$ref": "#/definitions/langKey" },
+        "fullLogs": { "$ref": "#/definitions/line" },
+        "fullLogsKey": { "$ref": "#/definitions/langKey" },
+        "review": { "$ref": "#/definitions/button" },
+        "reviewKey": { "$ref": "#/definitions/langKey" }
+      }
+    },
+    "face": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "maxLength": 16 },
+        "labelKey": { "$ref": "#/definitions/langKey" },
+        "icon": {
+          "description": "An svg in your own assets, like \"yourmod:textures/icons/great.svg\"",
+          "type": "string",
+          "pattern": "^[a-z0-9_]+:[a-z0-9_./-]+\\.svg$"
+        }
+      }
+    }
+  }
+}

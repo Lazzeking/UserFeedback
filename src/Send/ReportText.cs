@@ -16,15 +16,32 @@ public static class ReportText
     {
         string about = report.ModName ?? "a mod";
         string rating = report.Rating != null ? $" ({Capitalize(report.Rating)})" : "";
+        string tag = report.Kind == FeedbackReport.Bug ? "[Bug]" : $"[Feedback{rating}]";
         string start = FirstWords(report.Text, 60);
-        return start.Length > 0 ? $"[Feedback{rating}] {start}" : $"[Feedback{rating}] {about}";
+        return $"{tag} {(start.Length > 0 ? start : about)}";
+    }
+
+    /// <summary>
+    /// The files in the report folder besides report.json. A pasted report can't carry them, so the player is pointed
+    /// to the folder, which opens for them.
+    /// </summary>
+    public static List<string> Attachments(FeedbackReport report)
+    {
+        var files = new List<string>();
+        if (report.HasScreenshot) files.Add(ReportFiles.Screenshot);
+        if (report.LogEntries > 0) files.Add(ReportFiles.Log);
+        if (report.HasFullLogs) files.Add(ReportFiles.FullLogs);
+        if (report.ExtraFiles.Count > 0) files.Add(ReportFiles.Files);
+        return files;
     }
 
     /// <summary>The report without its log, then as many of the newest log lines as fit in maxLength</summary>
-    public static string Body(FeedbackReport report, string? log, int maxLength, bool attachmentsNote)
+    public static string Body(FeedbackReport report, string? log, int maxLength)
     {
         var text = new StringBuilder();
 
+        // The title says it too, but a report pasted into a web page may lose its title
+        if (report.Kind == FeedbackReport.Bug) text.AppendLine("**Bug report**  ");
         if (report.Rating != null) text.AppendLine($"**Rating:** {Capitalize(report.Rating)}  ");
         text.AppendLine($"**Mod:** {Describe(report.ModName, report.ModId, report.ModVersion)}  ");
         if (report.AlsoInvolved.Count > 0)
@@ -52,11 +69,23 @@ public static class ReportText
             text.AppendLine();
         }
 
-        var files = new List<string>();
-        if (report.HasScreenshot) files.Add("`screenshot.png`");
-        if (report.LogEntries > 0) files.Add("`log.txt`");
-        if (report.HasFullLogs) files.Add("`logs.zip`");
-        string footer = attachmentsNote && files.Count > 0
+        foreach ((string modId, var data) in report.ModData)
+        {
+            // Any mod can add data under any modid, so it's labelled as reported rather than as coming from that mod
+            text.AppendLine($"<details><summary>Data reported for {modId} (unverified)</summary>");
+            text.AppendLine();
+            text.AppendLine("```json");
+            text.AppendLine(data.ToString(Newtonsoft.Json.Formatting.Indented).Replace("```", "'''"));
+            text.AppendLine("```");
+            text.AppendLine();
+            text.AppendLine("</details>");
+            text.AppendLine();
+        }
+
+        List<string> files = Attachments(report).Select(file => file == ReportFiles.Files
+            ? $"`{file}` ({string.Join(", ", report.ExtraFiles)})"
+            : $"`{file}`").ToList();
+        string footer = files.Count > 0
             ? $"_Sent with UserFeedback. The player's report folder also has {string.Join(", ", files)}, they can drag them in here._"
             : "_Sent with UserFeedback._";
 

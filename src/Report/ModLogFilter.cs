@@ -7,7 +7,10 @@ using Vintagestory.API.Common;
 
 namespace UserFeedback;
 
-/// <summary>Picks the log entries that are about some mods: their modid, name, zip file or code (namespace in a stack trace).</summary>
+/// <summary>
+/// Picks the log entries that are about some mods: their modid, name, zip file or code (namespace in a stack trace),
+/// and the prefixes each one lists under "logMatch" in its userfeedback.json.
+/// </summary>
 public class ModLogFilter
 {
     /// <summary>The newest entries are kept when there are more</summary>
@@ -15,24 +18,24 @@ public class ModLogFilter
 
     private readonly Regex? pattern;
 
-    public ModLogFilter(IEnumerable<Mod> mods)
+    /// <param name="logMatch">A mod's checked "logMatch" prefixes, by modid (see LogMatchRules)</param>
+    public ModLogFilter(IEnumerable<Mod> mods, System.Func<string, IEnumerable<string>>? logMatch = null)
     {
         var tokens = new HashSet<string>();
         foreach (Mod mod in mods)
         {
-            // Whole words only, so a modid like "ore" doesn't match "more"
-            tokens.Add(Word(mod.Info.ModID));
-            if (mod.Info.Name.Length >= 4) tokens.Add(Word(mod.Info.Name));
-            if (!string.IsNullOrEmpty(mod.FileName)) tokens.Add(Word(mod.FileName));
+            if (logMatch != null)
+            {
+                foreach (string prefix in logMatch(mod.Info.ModID)) tokens.Add(LogMatchRules.Pattern(prefix));
+            }
+
+            tokens.UnionWith(LogPatterns.IdentityTokens(mod.Info.ModID, mod.Info.Name, mod.FileName));
 
             // "at TimeFliesBy.WallStreaks.At(...)": the first part of each mod system's namespace
             foreach (ModSystem system in mod.Systems)
             {
                 string? root = system.GetType().Namespace?.Split('.')[0];
-                if (root != null && root.Length >= 4 && !root.StartsWith("Vintagestory", StringComparison.Ordinal))
-                {
-                    tokens.Add(@"(?<!\w)" + Regex.Escape(root) + @"\.");
-                }
+                if (root != null && root.Length >= 4 && !LogPatterns.IsShared(root)) tokens.Add(LogPatterns.Namespace(root));
             }
         }
 
@@ -42,7 +45,8 @@ public class ModLogFilter
         }
     }
 
-    private static string Word(string text) => @"(?<!\w)" + Regex.Escape(text) + @"(?!\w)";
+    /// <summary>Whether one log text is about these mods</summary>
+    public bool Matches(string text) => pattern != null && pattern.IsMatch(text);
 
     public List<LogEntry> Matching(LogSnapshot snapshot)
     {

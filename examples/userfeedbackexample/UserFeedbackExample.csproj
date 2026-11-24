@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<!-- Packed by the main project's ReleaseToModsWithExample build. No reference to UserFeedback.dll. -->
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<LangVersion>latest</LangVersion>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<RootNamespace>UserFeedbackExample</RootNamespace>
+		<AssemblyName>UserFeedbackExample</AssemblyName>
+		<GenerateDependencyFile>false</GenerateDependencyFile>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(VINTAGE_STORY)' == ''">
+		<VINTAGE_STORY>/var/lib/flatpak/app/at.vintagestory.VintageStory/current/active/files/extra/vintagestory</VINTAGE_STORY>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<Reference Include="VintagestoryAPI">
+			<HintPath>$(VINTAGE_STORY)/VintagestoryAPI.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+	</ItemGroup>
+
+	<!-- A real mod copies api/UserFeedbackApi.cs into its own src; the example links it to stay current -->
+	<ItemGroup>
+		<Compile Include="../../api/UserFeedbackApi.cs" Link="src/UserFeedbackApi.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<None Include="modinfo.json" CopyToOutputDirectory="PreserveNewest" />
+		<None Include="assets/**/*" CopyToOutputDirectory="PreserveNewest" />
+	</ItemGroup>
+</Project>

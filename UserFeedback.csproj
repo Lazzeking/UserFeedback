@@ -6,7 +6,13 @@
 		<ImplicitUsings>disable</ImplicitUsings>
 		<RootNamespace>UserFeedback</RootNamespace>
 		<Configurations>Debug;Release;ReleaseToMods;ReleaseToModsWithExample</Configurations>
+		<!-- examples/ holds separate mods and tests/ the unit tests, each with their own projects. api/ is the file modders copy into their mods. -->
+		<DefaultItemExcludes>$(DefaultItemExcludes);examples/**;tests/**;api/**</DefaultItemExcludes>
 	</PropertyGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="UserFeedback.Tests" />
+	</ItemGroup>
 
 	<!-- Flatpak install. Export VINTAGE_STORY / VINTAGE_STORY_DATA to use another one -->
 	<PropertyGroup Condition="'$(VINTAGE_STORY)' == ''">
@@ -58,6 +64,10 @@
 		</Reference>
 		<Reference Include="Newtonsoft.Json">
 			<HintPath>$(VINTAGE_STORY)/Lib/Newtonsoft.Json.dll</HintPath>
+			<Private>false</Private>
+		</Reference>
+		<Reference Include="SkiaSharp">
+			<HintPath>$(VINTAGE_STORY)/Lib/SkiaSharp.dll</HintPath>
 			<Private>false</Private>
 		</Reference>
 		<Reference Include="protobuf-net">
@@ -120,6 +130,7 @@
 	</Target>
 
 	<Target Name="PackageExample" AfterTargets="Package" Condition="'$(Configuration)' == 'ReleaseToModsWithExample'">
+		<MSBuild Projects="$(MSBuildProjectDirectory)/examples/userfeedbackexample/UserFeedbackExample.csproj" Targets="Build" Properties="Configuration=Release" />
 		<ReadModVersion ModInfoPath="examples/userfeedbackexample/modinfo.json">
 			<Output TaskParameter="Version" PropertyName="ExampleVersion" />
 		</ReadModVersion>
@@ -127,6 +138,11 @@
 			<PreviousExampleZip Include="$(PackDir)/UserFeedbackExample-v*.zip" />
 		</ItemGroup>
 		<Delete Files="@(PreviousExampleZip)" />
-		<ZipDirectory DestinationFile="$(PackDir)/UserFeedbackExample-v$(ExampleVersion).zip" SourceDirectory="examples/userfeedbackexample" Overwrite="true" />
+		<ItemGroup>
+			<ExampleFile Include="$(MSBuildProjectDirectory)/examples/userfeedbackexample/bin/Release/net10.0/**/*" Exclude="$(MSBuildProjectDirectory)/examples/userfeedbackexample/bin/Release/net10.0/**/*.pdb" />
+		</ItemGroup>
+		<RemoveDir Directories="$(IntermediateOutputPath)example" />
+		<Copy SourceFiles="@(ExampleFile)" DestinationFiles="@(ExampleFile->'$(IntermediateOutputPath)example/%(RecursiveDir)%(Filename)%(Extension)')" />
+		<ZipDirectory DestinationFile="$(PackDir)/UserFeedbackExample-v$(ExampleVersion).zip" SourceDirectory="$(IntermediateOutputPath)example" Overwrite="true" />
 	</Target>
 </Project>

@@ -1,7 +1,59 @@
 {
+	"$schema": "https://feedback.lazzeking.fyi/schema/userfeedback-v1.json",
 	"destinations": [
-		{ "type": "github", "repo": "example-author/example-mod", "labels": ["feedback"] },
-		{ "type": "webpage", "url": "https://example.com/example-mod/feedback", "label": "The Example Mod feedback form" },
-		{ "type": "http", "url": "http://localhost:8080/userfeedback/v1" }
-	]
+		{
+			"type": "github",
+			"repo": "example-author/example-mod",
+			"labels": [
+				"bug"
+			],
+			"for": [
+				"bug"
+			]
+		},
+		{
+			"type": "webpage",
+			"url": "https://example.com/example-mod/feedback",
+			"label": "The Example Mod feedback form",
+			"for": [
+				"feedback"
+			]
+		},
+		{
+			"type": "http",
+			"url": "http://localhost:8080/userfeedback/v1"
+		}
+	],
+	"files": [
+		"ModConfig/userfeedback.json"
+	],
+	"logMatch": [
+		"ExampleProbe"
+	],
+	"panel": {
+		"title": "Example Mod",
+		"feedback": {
+			"heading": "Example Mod",
+			"prompt": "How is Example Mod so far?",
+			"text": "What should the next version change?"
+		},
+		"bug": {
+			"heading": "Something broke in Example Mod",
+			"text": "What broke, and what did you expect?"
+		},
+		"ratings": {
+			"great": {
+				"label": "Love it"
+			},
+			"good": {
+				"label": "Pretty good"
+			},
+			"meh": {
+				"label": "It's fine"
+			},
+			"bad": {
+				"label": "Not for me"
+			}
+		}
+	}
 }

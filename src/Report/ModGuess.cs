@@ -18,6 +18,9 @@ public static class ModGuess
             .ToList();
     }
 
+    /// <summary>How a mod is shown in the pickers: "Polymorph (1.2.0)"</summary>
+    public static string Label(Mod mod) => $"{mod.Info.Name} ({mod.Info.Version})";
+
     public static string? LookingAtCode(ICoreClientAPI capi)
     {
         IClientPlayer player = capi.World.Player;

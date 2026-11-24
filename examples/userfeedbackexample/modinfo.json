@@ -1,14 +1,15 @@
 {
-    "type": "content",
+    "type": "code",
     "modid": "userfeedbackexample",
     "name": "UserFeedback Example",
     "authors": [
         "Lazzeking"
     ],
     "version": "1.0.0",
-    "side": "Universal",
+    "side": "Client",
+    "requiredOnServer": false,
     "dependencies": {
         "game": "1.22.0"
     },
-    "description": "Reference for modders: how to add UserFeedback support to your own content, without depending on it."
+    "description": "Reference for modders: a feedback panel with this mod's own wording. Type .example to open it. Does not depend on UserFeedback."
 }

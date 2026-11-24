@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<!-- Unit tests for the parts that don't need a running game: the registry parser, and later the log matcher.
+	     Run with: dotnet test tests/UserFeedback.Tests -->
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<LangVersion>latest</LangVersion>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>disable</ImplicitUsings>
+		<IsPackable>false</IsPackable>
+		<IsTestProject>true</IsTestProject>
+	</PropertyGroup>
+
+	<!-- Same game install as the mod -->
+	<PropertyGroup Condition="'$(VINTAGE_STORY)' == ''">
+		<VINTAGE_STORY>/var/lib/flatpak/app/at.vintagestory.VintageStory/current/active/files/extra/vintagestory</VINTAGE_STORY>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+		<PackageReference Include="xunit" Version="2.9.2" />
+		<PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+		<!-- The game ships 13.0.4. Without this the test host's own 13.0.1 wins and misses methods the mod uses. -->
+		<PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- The copy-in helper for modders, checked against what UserFeedback reads -->
+		<Compile Include="../../api/UserFeedbackApi.cs" Link="UserFeedbackApi.cs" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="../../UserFeedback.csproj" />
+		<!-- The mod leaves the game's dlls out of its output (the game has them), the tests need them copied -->
+		<Reference Include="VintagestoryAPI">
+			<HintPath>$(VINTAGE_STORY)/VintagestoryAPI.dll</HintPath>
+		</Reference>
+	</ItemGroup>
+</Project>

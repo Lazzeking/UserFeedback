@@ -33,19 +33,31 @@ public static class RatingIcons
         return font;
     }
 
-    /// <summary>The icon name to give a button, or null when the svg isn't there</summary>
-    public static string? Get(ICoreClientAPI capi, string rating)
+    /// <summary>
+    /// The icon name to give a button, or null when the svg isn't there.
+    /// customAsset, when set, is a mod's own svg ("polymorph:textures/icons/great.svg"). A missing one falls back to the standard face.
+    /// </summary>
+    public static string? Get(ICoreClientAPI capi, string rating, string? customAsset = null)
     {
-        string name = $"{Core.ModId}-rating-{rating}";
+        if (customAsset != null && Load(capi, IconName(customAsset), customAsset) is string custom) return custom;
+        return Load(capi, $"{Core.ModId}-rating-{rating}", $"{Core.ModId}:textures/icons/rating-{rating}.svg");
+    }
+
+    private static string IconName(string asset) => $"{Core.ModId}-icon-{asset.Replace(':', '-').Replace('/', '-')}";
+
+    // The vanilla SvgIconSource paints the icon in the button's text color. Passing no color keeps the svg's own.
+    private static string? Load(ICoreClientAPI capi, string name, string asset)
+    {
         if (capi.Gui.Icons.CustomIcons.ContainsKey(name)) return name;
 
-        IAsset? asset = capi.Assets.TryGet(new AssetLocation(Core.ModId, $"textures/icons/rating-{rating}.svg"));
-        if (asset == null) return null;
+        int colon = asset.IndexOf(':');
+        if (colon <= 0) return null;
+        IAsset? loaded = capi.Assets.TryGet(new AssetLocation(asset[..colon], asset[(colon + 1)..]));
+        if (loaded == null) return null;
 
-        // The vanilla SvgIconSource paints the icon in the button's text color. Passing no color keeps the svg's own.
         capi.Gui.Icons.CustomIcons[name] = (ctx, x, y, w, h, rgba) =>
         {
-            if (ctx.GetTarget() is ImageSurface surface) capi.Gui.DrawSvg(asset, surface, x, y, (int)w, (int)h, null);
+            if (ctx.GetTarget() is ImageSurface surface) capi.Gui.DrawSvg(loaded, surface, x, y, (int)w, (int)h, null);
         };
         return name;
     }

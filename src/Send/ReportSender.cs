@@ -1,13 +1,12 @@
 using System;
-using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
 using Vintagestory.API.Client;
-using Vintagestory.API.Config;
+using static UserFeedback.ModLang;
 
 namespace UserFeedback;
 
@@ -21,10 +20,16 @@ public static class ReportSender
     private const int MaxGitHubUrl = 8000;
     /// <summary>Plenty for a page's text box, and the log is in log.txt anyway</summary>
     private const int MaxClipboard = 30000;
+    /// <summary>The relay's links are about 80 characters, this leaves room for other servers</summary>
+    private const int MaxFollowUrl = 500;
 
-    private static readonly HttpClient Http = CreateClient();
+    // The answer is a short JSON
+    private static readonly HttpClient Http = ServerHttp.CreateClient(TimeSpan.FromSeconds(30), 64 * 1024);
 
-    public static void Send(ICoreClientAPI capi, DestinationConfig destination, FeedbackReport report, string folder)
+    /// <param name="onStatus">For http: called on the main thread with the HTTP status of the server's answer</param>
+    /// <param name="onOutcome">Called on the main thread once it's known: FeedbackEvents.Opened, Delivered or Failed</param>
+    public static void Send(ICoreClientAPI capi, DestinationConfig destination, FeedbackReport report, string folder,
+        Action<int>? onStatus = null, Action<string>? onOutcome = null)
     {
         try
         {
@@ -32,19 +37,22 @@ public static class ReportSender
             {
                 case DestinationRegistry.GitHub:
                     SendToGitHub(capi, destination, report, folder);
+                    onOutcome?.Invoke(FeedbackEvents.Opened);
                     break;
                 case DestinationRegistry.WebPage:
                     SendToWebPage(capi, destination, report, folder);
+                    onOutcome?.Invoke(FeedbackEvents.Opened);
                     break;
                 case DestinationRegistry.Http:
-                    SendToHttp(capi, destination, report, folder);
+                    SendToHttp(capi, destination, report, folder, onStatus, onOutcome);
                     break;
             }
         }
         catch (Exception e)
         {
             capi.Logger.Error("[{0}] Could not send the report to {1}: {2}", Core.ModId, destination.Target, e);
-            Chat(capi, "send-failed", folder);
+            Chat(capi, "send-failed");
+            onOutcome?.Invoke(FeedbackEvents.Failed);
         }
     }
 
@@ -59,27 +67,28 @@ public static class ReportSender
         string url = "";
         for (int room = 6000; room > 500; room = room * 4 / 5)
         {
-            string body = ReportText.Body(report, log, room, attachmentsNote: true);
+            string body = ReportText.Body(report, log, room);
             url = $"https://github.com/{destination.Repo}/issues/new?title={Uri.EscapeDataString(title)}&body={Uri.EscapeDataString(body)}{labels}";
             if (url.Length <= MaxGitHubUrl) break;
         }
 
-        Open(url);
-        if (report.HasScreenshot || report.HasFullLogs || report.LogEntries > 0) ReportWriter.OpenFolder(folder);
+        Shell.Open(url);
+        if (ReportText.Attachments(report).Count > 0) ReportWriter.OpenFolder(folder);
         Chat(capi, "sent-github", destination.Repo!);
     }
 
     // The report goes to the clipboard and the author's page opens, the player pastes it there
     private static void SendToWebPage(ICoreClientAPI capi, DestinationConfig destination, FeedbackReport report, string folder)
     {
-        capi.Input.ClipboardText = ReportText.Body(report, ReadLog(folder), MaxClipboard, attachmentsNote: true);
-        Open(destination.Url!);
-        if (report.HasScreenshot || report.HasFullLogs) ReportWriter.OpenFolder(folder);
+        capi.Input.ClipboardText = ReportText.Body(report, ReadLog(folder), MaxClipboard);
+        Shell.Open(destination.Url!);
+        if (ReportText.Attachments(report).Count > 0) ReportWriter.OpenFolder(folder);
         Chat(capi, "sent-webpage", new Uri(destination.Url!).Host);
     }
 
     // multipart/form-data as described in docs/http-protocol.md
-    private static void SendToHttp(ICoreClientAPI capi, DestinationConfig destination, FeedbackReport report, string folder)
+    private static void SendToHttp(ICoreClientAPI capi, DestinationConfig destination, FeedbackReport report, string folder,
+        Action<int>? onStatus, Action<string>? onOutcome)
     {
         string host = new Uri(destination.Url!).Host;
         Chat(capi, "sending", host);
@@ -87,70 +96,124 @@ public static class ReportSender
         Task.Run(async () =>
         {
             string message;
+            int? status = null;
+            bool sent = false;
             try
             {
                 using var form = new MultipartFormDataContent();
-                AddFile(form, folder, "report.json", "report", "application/json");
-                AddFile(form, folder, "screenshot.png", "screenshot", "image/png");
-                AddFile(form, folder, "log.txt", "log", "text/plain");
-                AddFile(form, folder, "logs.zip", "logs", "application/zip");
+                AddFile(form, folder, ReportFiles.Report, "report", "application/json");
+                AddFile(form, folder, ReportFiles.Screenshot, "screenshot", "image/png");
+                AddFile(form, folder, ReportFiles.Log, "log", "text/plain");
+                AddFile(form, folder, ReportFiles.FullLogs, "logs", "application/zip");
+                AddFile(form, folder, ReportFiles.Files, "files", "application/zip");
 
-                using var request = new HttpRequestMessage(HttpMethod.Post, destination.Url) { Content = form };
-                // Names the software, nothing about the player
-                request.Headers.UserAgent.ParseAdd($"UserFeedback/{Core.Version}");
+                using HttpRequestMessage request = ServerHttp.NewRequest(HttpMethod.Post, destination.Url!);
+                request.Content = form;
                 request.Headers.Add("X-UserFeedback-Mod", report.ModId ?? "");
+                // The relay adds the same when it forwards, so a server can route without reading report.json
+                request.Headers.Add("X-UserFeedback-Kind", report.Kind);
                 using HttpResponseMessage response = await Http.SendAsync(request);
-                message = await Describe(response, host);
+                status = (int)response.StatusCode;
+                ServerReply reply = ServerReply.Parse(await response.Content.ReadAsStringAsync());
+                sent = response.IsSuccessStatusCode;
+                string? followUrl = sent ? FollowUrl(capi, reply, host) : null;
+                if (followUrl != null) SaveFollowUrl(capi, folder, followUrl, reply.SafeId);
+                message = Describe(response, reply, host, followUrl);
             }
             catch (TaskCanceledException)
             {
-                message = Lang.Get($"{Core.ModId}:http-timeout", host);
+                message = L("http-timeout", host);
             }
             catch (Exception e)
             {
                 capi.Logger.Warning("[{0}] Uploading the report to {1} failed: {2}", Core.ModId, destination.Url, e.Message);
-                message = Lang.Get($"{Core.ModId}:http-unreachable", host);
+                message = L("http-unreachable", host);
             }
 
             capi.Event.EnqueueMainThreadTask(() =>
             {
-                capi.ShowChatMessage(message);
-                capi.ShowChatMessage(Lang.Get($"{Core.ModId}:kept-in", folder));
+                // One line when it worked. When it didn't, also where the report waits, so it isn't lost.
+                capi.ShowChatMessage(sent ? message : message + " " + L("kept-in"));
+                if (status != null) onStatus?.Invoke(status.Value);
+                onOutcome?.Invoke(sent ? FeedbackEvents.Delivered : FeedbackEvents.Failed);
             }, Core.ModId + "-sent");
         });
     }
 
-    private static async Task<string> Describe(HttpResponseMessage response, string host)
+    /// <param name="followUrl">Checked by FollowUrl, safe to put in a link</param>
+    private static string Describe(HttpResponseMessage response, ServerReply reply, string host, string? followUrl)
     {
-        string body = await response.Content.ReadAsStringAsync();
+        // Whatever the server wrote is someone else's text in the player's chat: plain, short, and said to be theirs
+        string? id = reply.SafeId;
+        string? said = reply.SafeMessage;
 
+        string text;
         if (response.IsSuccessStatusCode)
         {
-            string? id = TryJson(body, "id");
-            return id != null ? Lang.Get($"{Core.ModId}:http-sent-id", host, id) : Lang.Get($"{Core.ModId}:http-sent", host);
+            // With a follow link the reference and the site's own message add nothing: the page has both
+            if (followUrl != null) return L("http-sent-follow", host, followUrl);
+            text = id != null ? L("http-sent-id", host, id) : L("http-sent", host);
+        }
+        else
+        {
+            string key = response.StatusCode switch
+            {
+                HttpStatusCode.TooManyRequests => "http-rate-limited",
+                HttpStatusCode.Forbidden or HttpStatusCode.NotFound => "http-not-accepted",
+                HttpStatusCode.RequestEntityTooLarge => "http-too-large",
+                _ => "http-error",
+            };
+            text = L(key, host, (int)response.StatusCode);
+            if (response.StatusCode == HttpStatusCode.TooManyRequests && ServerHttp.RetryMinutes(response) is int minutes)
+            {
+                text = L("http-rate-limited-wait", host, minutes);
+            }
         }
 
-        string? reason = TryJson(body, "message");
-        string key = response.StatusCode switch
-        {
-            HttpStatusCode.TooManyRequests => "http-rate-limited",
-            HttpStatusCode.Forbidden or HttpStatusCode.NotFound => "http-not-accepted",
-            HttpStatusCode.RequestEntityTooLarge => "http-too-large",
-            _ => "http-error",
-        };
-        string text = Lang.Get($"{Core.ModId}:{key}", host, (int)response.StatusCode);
-        return reason != null ? $"{text} ({reason})" : text;
+        return said != null ? text + "\n" + L("http-says", host, said) : text;
     }
 
-    private static string? TryJson(string body, string field)
+    /// <summary>
+    /// The private page where the player can follow the report, read the author's replies or delete it (followUrl in the
+    /// answer, see docs/http-protocol.md). Null when there is none or it isn't safe: it must be https on the host the
+    /// report went to, and have nothing VTML would read as markup, since chat shows it as a link.
+    /// </summary>
+    private static string? FollowUrl(ICoreClientAPI capi, ServerReply reply, string host)
     {
+        string? text = reply.FollowUrl;
+        if (text == null) return null;
+
+        if (text.Length > MaxFollowUrl || !Uri.TryCreate(text, UriKind.Absolute, out Uri? uri) || uri.Scheme != Uri.UriSchemeHttps
+            || !string.Equals(uri.Host, host, StringComparison.OrdinalIgnoreCase) || uri.UserInfo.Length > 0)
+        {
+            capi.Logger.Warning("[{0}] {1} answered with a followUrl that isn't https on its own host, it is ignored", Core.ModId, host);
+            return null;
+        }
+
+        string url = uri.AbsoluteUri;
+        if (url.IndexOfAny(new[] { '"', '\'', '<', '>', '&', ' ' }) >= 0 || url.Any(char.IsControl))
+        {
+            capi.Logger.Warning("[{0}] {1} answered with a followUrl that has characters chat can't show safely, it is ignored", Core.ModId, host);
+            return null;
+        }
+        return url;
+    }
+
+    /// <summary>
+    /// Keeps the follow link as follow-url.txt in the report folder, with the report's id on a second line, which chat
+    /// doesn't show then: the player can quote it instead of the private link.
+    /// </summary>
+    private static void SaveFollowUrl(ICoreClientAPI capi, string folder, string url, string? id)
+    {
+        // The link stays the first line on its own
+        string content = url + Environment.NewLine + (id != null ? $"Report: {id}{Environment.NewLine}" : "");
         try
         {
-            return JObject.Parse(body)[field]?.ToString();
+            File.WriteAllText(Path.Combine(folder, ReportFiles.FollowUrl), content);
         }
-        catch (Exception)
+        catch (Exception e)
         {
-            return null;
+            capi.Logger.Warning("[{0}] Could not save follow-url.txt: {1}", Core.ModId, e.Message);
         }
     }
 
@@ -166,20 +229,8 @@ public static class ReportSender
 
     private static string ReadLog(string folder)
     {
-        string path = Path.Combine(folder, "log.txt");
+        string path = Path.Combine(folder, ReportFiles.Log);
         return File.Exists(path) ? File.ReadAllText(path) : "";
     }
 
-    private static void Open(string url)
-    {
-        // UseShellExecute opens it in the default browser
-        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-    }
-
-    private static void Chat(ICoreClientAPI capi, string key, params object[] args)
-    {
-        capi.ShowChatMessage(Lang.Get($"{Core.ModId}:{key}", args));
-    }
-
-    private static HttpClient CreateClient() => new() { Timeout = TimeSpan.FromSeconds(30) };
 }
